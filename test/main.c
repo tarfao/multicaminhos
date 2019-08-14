@@ -5,6 +5,18 @@
 
 #define PI 3.14159265358979323846 
 
+/*lista para obter as rotas encontradas, utilizando uma matriz
+2xN, na qual a primeira linha representa os id's/ip's dos 
+ dispositivos, e a segunda linha representa as baterias dos dispositivos*/
+typedef struct routes{
+    double id;
+    double energy;
+    int fim; /*1 para fim do primeiro caminho, 0 para dispositivo intermediario
+            assim podemos fazer graficos limitados, definir quando parar de procurar,
+            ou pode ser desnecessario em alguns momentos. */
+    struct routes * prox;
+} ROTAS;
+
 NODE *Nos;
 int N;/*representa a quantidade de dispositivos */
 int dispMenu = -1;/*representa o dispositivo que foi clicado */
@@ -148,9 +160,19 @@ void grava_medias_dijkstra()
     grava_energia();
 }
 
+void teste(ROTAS *p){
+    puts("encontrou rota\n");
+
+    while(p != NULL){
+        printf("(%.3f , %.3f) ",p->id, p->energy);
+        if(p->fim && p->prox != NULL)
+            puts("outro caminho\n");
+        p=p->prox;
+    }
+}
+
 void *print_time(void *args){
 
-    DATE_THREAD date;
     struct timeval time_inicial, time_final;
     double tIni, tFim;
     int i, j, aux;
@@ -162,13 +184,10 @@ void *print_time(void *args){
     int qtbarra_ene;
     int num_arq;
     char nome_arq[20];
-
     int med_aux_local;
+    ROTAS *rotas; /*obtem os caminhos encontrados */
+    ROTAS *auxRotas; 
 
-
-    date.x = malloc(sizeof(double) * N);
-    date.y = malloc(sizeof(double) * N);
-    date.cont = 0;
     printf("Resposta para rota em dijkstra:::::\n");
 
     if(Nos[inicial].mtDijks[final][N+1] < 0.0){//o N+1 representa o proximo dispositivo, se ele é -1 significa que nao há rotas até o proximo nó -> rede desconexa
@@ -178,6 +197,7 @@ void *print_time(void *args){
     }
 
     num_arq = 0;
+    rotas = NULL; /*como nao foi encontrado nenhum caminho, inicializamos a variavel */
 
     while(1) {
 
@@ -224,89 +244,131 @@ void *print_time(void *args){
                 if(Nos[i].Pwa > 0)
                     dijkstra(&Nos[i], Nos, N);
             } 
+
+            med_temp_dijks += (tFim - tIni);
+            qt_temp_dijks++;
+
+            while(Nos[inicial].mtDijks[final][N+1] != -1){
+                printf("Resposta para rota em dijkstra:::::\n");
+
+                if(Nos[inicial].Pwa != 0){ 
+                    Nos[inicial].color = 1;
+                    if(Nos[final].Pwa != 0){ 
+                        Nos[final].color = 2;
+                        aux = inicial;
+                        med_aux_local = 0;
+                        while (aux != final){
+                            if(Nos[aux].Pwa == 0){
+                                printf("Dispositivo descarregado de id = %i\n", aux);
+                                inicializa_color(N, Nos);
+                                Nos[aux].color = 4;
+                                aux = final;
+                                grava_medias_dijkstra();
+                                /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
+                            }else{
+                                if((int)Nos[aux].mtDijks[final][N+1] == -1){
+                                    teste(auxRotas);
+                                    if(Nos[aux].countRoutes == 0)
+                                        printf("Rede desconexa! %d\n",aux);
+                                    else
+                                        printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
+                                    aux = final;
+                                    //grava_medias_dijkstra();
+                                } else{
+                                    if(rotas == NULL){
+                                        rotas = malloc(sizeof(ROTAS));
+                                        rotas->prox = NULL;
+                                        auxRotas = rotas;
+                                    }
+                                    else{
+                                        rotas->prox = malloc(sizeof(ROTAS));
+                                        rotas = rotas->prox;
+                                        rotas->prox = NULL;
+                                    }
+                                    
+                                    rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                                    rotas->energy = (double)Nos[aux].Pwa;
+                                    rotas->fim = 0;
+
+                                    med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
+
+                                    /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
+                                    if(aux == inicial){
+                                        Nos[aux].countRoutes++;
+                                    }else{
+                                        Nos[aux].sendData = 1;
+                                        Nos[aux].color = 3;
+                                    }
+
+                                    aux = (int)Nos[aux].mtDijks[final][N+1];
+
+                                    if(aux == final){
+                                        rotas->prox = malloc(sizeof(ROTAS));
+                                        rotas = rotas->prox;
+                                        rotas->prox = NULL;
+
+                                        rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                                        rotas->energy = (double)Nos[aux].Pwa;
+                                        rotas->fim = 1;
+                                        med_energia += rotas->energy;
+                                    }
+                                }
+                            }
+
+                        }
+                    } else {
+                        puts("final descarregado!\n");
+                        grava_medias_dijkstra();
+                    }
+                } else {
+                    puts("inicial descarregado!!\n");
+                    grava_medias_dijkstra();
+                }
+
+                conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
+
+                for(i = 0; i < N; i++){
+                    inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
+                }
+
+                for (i = 0; i < N; i++) {
+                    if(Nos[i].Pwa > 0)
+                        dijkstra(&Nos[i], Nos, N);
+                } 
+            }
+    
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
 
             med_temp_dijks += (tFim - tIni);
             qt_temp_dijks++;
 
-            printf("Resposta para rota em dijkstra:::::\n");
-            date.cont = 0;
-
-            if(Nos[inicial].Pwa != 0){ 
-                Nos[inicial].color = 1;
-                if(Nos[final].Pwa != 0){ 
-                    Nos[final].color = 2;
-                    aux = inicial;
-                    med_aux_local = 0;
-                    while (aux != final){
-                        if(Nos[aux].Pwa == 0){
-                            printf("Dispositivo descarregado de id = %i\n", aux);
-                            inicializa_color(N, Nos);
-                            Nos[aux].color = 4;
-                            aux = final;
-                            grava_medias_dijkstra();
-                            /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
-                        }else{
-                            date.x[date.cont] = (double)Nos[aux].Id;
-                            date.y[date.cont] = (double)Nos[aux].Pwa;
-                            med_energia += date.y[date.cont];/*acumula a energia para gerar uma media para o arquivo */
-                            date.cont++;
-                            
-                            if(aux != inicial){
-                                Nos[aux].sendData = 1;
-                                Nos[aux].color = 3;
-                            }
-                            if((int)Nos[aux].mtDijks[final][N+1] == -1){
-                                if(Nos[aux].countRoutes == 0)
-                                    printf("Rede desconexa! %d\n",aux);
-                                else
-                                    printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
-                                aux = final;
-                                //grava_medias_dijkstra();
-                            } else{
-                                if(aux == inicial){
-                                    Nos[aux].countRoutes++;
-                                }
-                                aux = (int)Nos[aux].mtDijks[final][N+1];
-                            }
-                        }
-                        
-
-                    }
-                    if(date.cont != 0){
-                        date.x[date.cont] = (double)Nos[aux].Id;
-                        date.y[date.cont] = (double)Nos[aux].Pwa;
-                        med_energia += date.y[date.cont];
-
-                        date.cont++;
-
-                        med_dispositivo += date.cont;
-                        num_ciclos++;
-                    }
-                } else {
-                    puts("final descarregado!\n");
-                    grava_medias_dijkstra();
-                }
-            } else {
-                puts("inicial descarregado!!\n");
-                grava_medias_dijkstra();
-            }
+            printf("\n===MEDIA = %f =====\n",med_temp_dijks/qt_temp_dijks);
 
             sprintf(nome_arq,"histog.txt");
             
-            if((fp = fopen("hitog.txt", "w")) == NULL)
+            if((fp = fopen("histog.txt", "w")) == NULL)
             {
                 puts("Erro na abertura do arquivo de log para constru��o do caminho!\n");
             }
 
-            for(j = 0; j < date.cont; j++){
-                fprintf(fp, "%.1f %.1f\n",date.x[j], date.y[j]);
+            rotas = auxRotas;
+
+            while(!rotas->fim){
+                fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                rotas=rotas->prox;
+            }
+
+            fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+
+            while(rotas->prox!=NULL)
+            {
+                rotas = rotas->prox;
             }
             fclose(fp);
 
             gnuplot_resetplot(graph);
-            if(date.cont != 0){
+            if(auxRotas != NULL){
                 gnuplot_cmd(graph, "set style data histograms");
                 gnuplot_cmd(graph, "set yrange[0:100]");
                 gnuplot_set_xlabel(graph, "ID node");
@@ -326,8 +388,13 @@ void *print_time(void *args){
 
     gnuplot_close(graph);
 
-    free(date.x); 
-    free(date.y);
+    while(auxRotas->prox != NULL){
+        rotas = auxRotas->prox;
+        free(auxRotas);
+        auxRotas=rotas;
+    }
+
+    free(auxRotas);
 }
 
 /*funcao para gravar a matriz de distancia do tipo float em um arquivo de nome igual a file_name */
