@@ -1,3 +1,5 @@
+/*"This software uses the gnuplot_i library written by N.Devillard" */
+
 #include "router.h"
 #include "gnuplot_i.h"
 #include <pthread.h>
@@ -105,9 +107,10 @@ void grava_energia()
     int qtbarra_ene;
     char arq;
     double media_energ = med_energia/med_dispositivo;
-    double media_dispos = med_dispositivo/num_ciclos;
+    double media_dispos = med_dispositivo/(qt_temp_dijks - 1); /*diminui um porque o qt_temp_dijks conta a 
+                                                                ultima iteracao que nao encontra nenhum dispositivo pois o grafo nao eh conexo */
 
-    if((fp = fopen("media_energia_dispositivo.txt", "a+")) == NULL)
+    if((fp = fopen("./dados/media_energia_dispositivo.txt", "a+")) == NULL)
     {
         puts("Erro na abertura do arquivo de log para construcao do grafico de tempo dijk!\n");
         exit(1);
@@ -123,9 +126,11 @@ void grava_energia()
     }
     qtbarra_ene++;
     
-    fprintf(fp,"%d %.6f %.6f %d\n", qtbarra_ene, media_energ, media_dispos, num_ciclos);
+    fprintf(fp,"%.6f %.6f %d\n", media_energ, media_dispos, qt_temp_dijks-1);
 
     fclose(fp);
+
+    exit(2);
 }
 
 /*=======================================GRAVACAO DA MEDIA DE TEMPO DE EXECUCAO PARA O ALGORITMO DE DIJKSTRA================================= */
@@ -137,7 +142,7 @@ void grava_medias_dijkstra()
     char arq;
     double media = med_temp_dijks/qt_temp_dijks;
 
-    if((fp = fopen("media_exec_dijks.txt", "a+")) == NULL)
+    if((fp = fopen("./dados/media_exec_dijks.txt", "a+")) == NULL)
     {
         puts("Erro na abertura do arquivo de log para construcao do grafico de tempo dijk!\n");
         exit(1);
@@ -153,7 +158,7 @@ void grava_medias_dijkstra()
     }
     qtbarra_ene++;
     
-    fprintf(fp,"%d %.6f\n", qtbarra_ene, media);
+    fprintf(fp,"%.6f\n", media);
 
     fclose(fp);
 
@@ -177,7 +182,7 @@ void *print_time(void *args){
     double tIni, tFim;
     int i, j, aux;
     int cargaRetirada; /*potencia de carga que será retirado da bateria residual*/
-    gnuplot_ctrl * graph = gnuplot_init();
+    gnuplot_ctrl **graph;
     char msg[100]; /*msg para enviar no plot*/
     FILE *fp;
     char arq;
@@ -187,6 +192,10 @@ void *print_time(void *args){
     int med_aux_local;
     ROTAS *rotas; /*obtem os caminhos encontrados */
     ROTAS *auxRotas; 
+    /*variaveis para contar a quantidade de caminhos e auxiliar 
+    na plotagem do grafico */
+    int total_caminhos = 0;
+    int conta_dispositivos;
 
     printf("Resposta para rota em dijkstra:::::\n");
 
@@ -223,106 +232,105 @@ void *print_time(void *args){
         }*/
         click = 1;
         if(click == 1){           
-            /*for (i = 0; i < N; i++) {
+            inicializa_color(N, Nos);
+            Nos[inicial].color = 1;
+            Nos[final].color = 2;
+            for (i = 0; i < N; i++) {
                 cargaRetirada = rand() % 8;
                 if(Nos[i].Pwa - cargaRetirada < 0){
                     Nos[i].Pwa = 0;
                     Nos[i].color = 4;
                 }else{
                     Nos[i].Pwa -= cargaRetirada;
+                    Nos[i].sendData = 0;
                 }
-            }*/
+            }
             conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
 
             for(i = 0; i < N; i++){
                 inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
+            } 
+
+            for(i = 0; i < total_caminhos; i++)
+            {
+                gnuplot_close(graph[i]);
             }
+
+            if(total_caminhos != 0)
+                free(graph);
+
+            total_caminhos = 0;
 
             gettimeofday(&time_inicial, NULL);
             tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
             for (i = 0; i < N; i++) {
                 if(Nos[i].Pwa > 0)
                     dijkstra(&Nos[i], Nos, N);
-            } 
-
-            med_temp_dijks += (tFim - tIni);
-            qt_temp_dijks++;
+            }
 
             while(Nos[inicial].mtDijks[final][N+1] != -1){
                 printf("Resposta para rota em dijkstra:::::\n");
+                total_caminhos++;  
+                aux = inicial;
+                med_aux_local = 0;
+                while (aux != final){
+                    if(Nos[aux].Pwa == 0){
+                        printf("Dispositivo descarregado de id = %i\n", aux);
+                        inicializa_color(N, Nos);
+                        Nos[aux].color = 4;
+                        aux = final;
+                        grava_medias_dijkstra();
+                        /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
+                    }else{
+                        if((int)Nos[aux].mtDijks[final][N+1] == -1){
+                            teste(auxRotas);
+                            if(Nos[aux].countRoutes == 0)
+                                printf("Rede desconexa! %d\n",aux);
+                            else
+                                printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
+                            aux = final;
+                            //grava_medias_dijkstra();
+                        } else{
+                            if(rotas == NULL){
+                                rotas = malloc(sizeof(ROTAS));
+                                rotas->prox = NULL;
+                                auxRotas = rotas;
+                            }
+                            else{
+                                rotas->prox = malloc(sizeof(ROTAS));
+                                rotas = rotas->prox;
+                                rotas->prox = NULL;
+                            }
+                            
+                            rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                            rotas->energy = (double)Nos[aux].Pwa;
+                            rotas->fim = 0;
 
-                if(Nos[inicial].Pwa != 0){ 
-                    Nos[inicial].color = 1;
-                    if(Nos[final].Pwa != 0){ 
-                        Nos[final].color = 2;
-                        aux = inicial;
-                        med_aux_local = 0;
-                        while (aux != final){
-                            if(Nos[aux].Pwa == 0){
-                                printf("Dispositivo descarregado de id = %i\n", aux);
-                                inicializa_color(N, Nos);
-                                Nos[aux].color = 4;
-                                aux = final;
-                                grava_medias_dijkstra();
-                                /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
+                            med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
+
+                            /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
+                            if(aux == inicial){
+                                Nos[aux].countRoutes++;
                             }else{
-                                if((int)Nos[aux].mtDijks[final][N+1] == -1){
-                                    teste(auxRotas);
-                                    if(Nos[aux].countRoutes == 0)
-                                        printf("Rede desconexa! %d\n",aux);
-                                    else
-                                        printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
-                                    aux = final;
-                                    //grava_medias_dijkstra();
-                                } else{
-                                    if(rotas == NULL){
-                                        rotas = malloc(sizeof(ROTAS));
-                                        rotas->prox = NULL;
-                                        auxRotas = rotas;
-                                    }
-                                    else{
-                                        rotas->prox = malloc(sizeof(ROTAS));
-                                        rotas = rotas->prox;
-                                        rotas->prox = NULL;
-                                    }
-                                    
-                                    rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
-                                    rotas->energy = (double)Nos[aux].Pwa;
-                                    rotas->fim = 0;
-
-                                    med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
-
-                                    /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
-                                    if(aux == inicial){
-                                        Nos[aux].countRoutes++;
-                                    }else{
-                                        Nos[aux].sendData = 1;
-                                        Nos[aux].color = 3;
-                                    }
-
-                                    aux = (int)Nos[aux].mtDijks[final][N+1];
-
-                                    if(aux == final){
-                                        rotas->prox = malloc(sizeof(ROTAS));
-                                        rotas = rotas->prox;
-                                        rotas->prox = NULL;
-
-                                        rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
-                                        rotas->energy = (double)Nos[aux].Pwa;
-                                        rotas->fim = 1;
-                                        med_energia += rotas->energy;
-                                    }
-                                }
+                                Nos[aux].sendData = 1;
+                                Nos[aux].color = 3;
                             }
 
+                            aux = (int)Nos[aux].mtDijks[final][N+1];
+
+                            if(aux == final){
+                                rotas->prox = malloc(sizeof(ROTAS));
+                                rotas = rotas->prox;
+                                rotas->prox = NULL;
+
+                                rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                                rotas->energy = (double)Nos[aux].Pwa;
+                                rotas->fim = 1;
+                                med_energia += rotas->energy;
+                            }
                         }
-                    } else {
-                        puts("final descarregado!\n");
-                        grava_medias_dijkstra();
                     }
-                } else {
-                    puts("inicial descarregado!!\n");
-                    grava_medias_dijkstra();
+
                 }
 
                 conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
@@ -340,53 +348,86 @@ void *print_time(void *args){
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
 
-            med_temp_dijks += (tFim - tIni);
-            qt_temp_dijks++;
+            med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
+            qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
 
-            printf("\n===MEDIA = %f =====\n",med_temp_dijks/qt_temp_dijks);
-
-            sprintf(nome_arq,"histog.txt");
-            
-            if((fp = fopen("histog.txt", "w")) == NULL)
-            {
-                puts("Erro na abertura do arquivo de log para constru��o do caminho!\n");
+            if(total_caminhos == 0) {
+                if(Nos[inicial].Pwa == 0) {
+                    puts("\nDispositivo inicial descarregado");
+                } else {
+                    if (Nos[final].Pwa == 0)
+                        puts("\nDispositivo final descarregado");
+                    else
+                        puts("\nRede desconexa");
+                } 
+                    
+                grava_medias_dijkstra();
             }
+            else {
+                med_dispositivo += conta_dispositivos;
+            }
+            
+
+            conta_dispositivos = 0;
 
             rotas = auxRotas;
 
-            while(!rotas->fim){
+            for(i = 0; i < total_caminhos; i++){
+
+                sprintf(nome_arq,"./histograma/histog_%d.txt",i);
+            
+                if((fp = fopen(nome_arq, "w")) == NULL)
+                {
+                    puts("Erro na abertura do arquivo de log para constru��o do caminho!\n");
+                }
+
+                while(!rotas->fim){
+                    fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                    rotas=rotas->prox;
+                    conta_dispositivos++;
+                }
+
                 fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                rotas=rotas->prox;
+                conta_dispositivos++;
+                if(rotas->prox != NULL)
+                    rotas=rotas->prox;
+
+                fclose(fp);
             }
-
-            fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-
-            while(rotas->prox!=NULL)
-            {
-                rotas = rotas->prox;
-            }
-            fclose(fp);
-
-            gnuplot_resetplot(graph);
-            if(auxRotas != NULL){
-                gnuplot_cmd(graph, "set style data histograms");
-                gnuplot_cmd(graph, "set yrange[0:100]");
-                gnuplot_set_xlabel(graph, "ID node");
-                gnuplot_set_ylabel(graph, "Energy");
-                gnuplot_setstyle(graph, "fill solid");
-                sprintf(msg,"plot './histog.txt' using 2:xtic(1) title 'Trafego de %i para %i'", inicial, final);
-                gnuplot_cmd(graph, msg);
-
                 
-            }else{
-                gnuplot_cmd(graph, "plot title 'no data'");
+
+            printf("Tamanho inicial = %d",sizeof(*graph));
+            
+            graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
+
+            printf("Tamanho inicial = %d",sizeof(*graph));
+
+            for(i = 0; i < total_caminhos; i++)
+                graph[i] = gnuplot_init();
+
+
+            for(i = 0; i < total_caminhos; i++){
+                sprintf(nome_arq,"histog_%d.txt",i);
+                gnuplot_resetplot(graph[i]);
+                if(auxRotas != NULL){
+                    gnuplot_cmd(graph[i], "set style data histograms");
+                    gnuplot_cmd(graph[i], "set yrange[0:100]");
+                    gnuplot_set_xlabel(graph[i], "ID node");
+                    gnuplot_set_ylabel(graph[i], "Energy");
+                    gnuplot_setstyle(graph[i], "fill solid");
+                    gnuplot_cmd(graph[i],"set key above right");
+                    sprintf(msg,"plot './histograma/histog_%d.txt' using 2:xtic(1) title 'Trafego de %i para %i -> %s' ",i, inicial, final,nome_arq);
+                    gnuplot_cmd(graph[i], msg);
+
+                    
+                }else{
+                    gnuplot_cmd(graph[i], "plot title 'no data'");
+                }
             }
 
             click = -1;
         }
     }
-
-    gnuplot_close(graph);
 
     while(auxRotas->prox != NULL){
         rotas = auxRotas->prox;
