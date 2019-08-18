@@ -131,8 +131,8 @@ void inicializaNos(int N, NODE *Nos, int sink)
     srand(time(NULL));
     for(i = 0; i < N; i++){
         Nos[i].Id = i;
-        Nos[i].Pwi = 100;/*rand() % 100 + 1 */
-        Nos[i].Pwa = rand() % 20 + 8;/*rand() % Nos[i].Pwi + 1 */
+        Nos[i].Pwi = rand() % 30 + 70; 
+        Nos[i].Pwa = rand() % 30 + (Nos[i].Pwi - 30);/*rand() % Nos[i].Pwi + 1 */
         Nos[i].mtAdjMet = alocaMatrizf(2,N);
         inicializaMatrizf(2, N, 0.0, Nos[i].mtAdjMet);
         Nos[i].mtDijks = alocaMatrizf(N,N+2);

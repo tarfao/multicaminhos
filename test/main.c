@@ -552,9 +552,6 @@ void init(void){
     gettimeofday(&time_final, NULL);
     tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
 
-    qt_temp_dijks += (tFim - tIni);
-    qt_temp_dijks++;
-
     file_rec_matrix("MatrizDistancia", MatrizDistancia);
     file_rec_matrix_dij("Dijkstra");
     file_rec_matrix_met("Metricas");
