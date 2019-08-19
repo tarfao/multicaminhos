@@ -15,8 +15,8 @@ const double raio = 40;
 const int MAXX = 600;
 const int MAXY = 400;
 
-const int LARGURA_TELA = 1020;
-const int ALTURA_TELA = 640;
+const int LARGURA_TELA = 1400;
+const int ALTURA_TELA = 800;
 
 typedef struct sensor
 {

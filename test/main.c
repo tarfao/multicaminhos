@@ -16,14 +16,14 @@ typedef struct routes{
     int fim; /*1 para fim do primeiro caminho, 0 para dispositivo intermediario
             assim podemos fazer graficos limitados, definir quando parar de procurar,
             ou pode ser desnecessario em alguns momentos. */
-    struct routes * prox;
+    struct routes * prox; 
 } ROTAS;
 
 NODE *Nos;
 int N;/*representa a quantidade de dispositivos */
 int dispMenu = -1;/*representa o dispositivo que foi clicado */
 int inicial = -1, final = -1;/*representa o dispositivo inicial e final */
-int ax = 1020, ay = 640; /*representa os eixos x e y do plano do opengl. Ele nao eh o tamanho da janela */
+int ax = LARGURA_TELA - 10, ay = ALTURA_TELA - 10; /*representa os eixos x e y do plano do opengl. Ele nao eh o tamanho da janela */
 int click = -1;/*representa o dispositivo eu devo atribuir a cor de inicial ou final
             se -1 -> nao foi atribuido o incial
             se 0 -> ja foi atribuido o inicial, resta o dispositivo final
@@ -106,9 +106,19 @@ void grava_energia()
     FILE *fp;
     int qtbarra_ene;
     char arq;
-    double media_energ = med_energia/med_dispositivo;
-    double media_dispos = med_dispositivo/(qt_temp_dijks - 1); /*diminui um porque o qt_temp_dijks conta a 
+    double media_energ;
+    double media_dispos; /*diminui um porque o qt_temp_dijks conta a 
                                                                 ultima iteracao que nao encontra nenhum dispositivo pois o grafo nao eh conexo */
+
+    if(qt_temp_dijks-1)
+        media_dispos = med_dispositivo/(qt_temp_dijks - 1);
+    else
+        puts("zerooo! disp");
+
+    if(med_dispositivo)
+        media_energ = med_energia/med_dispositivo;
+    else
+        puts("zerooo! energy");
 
     if((fp = fopen("./dados/media_energia_dispositivo.txt", "a+")) == NULL)
     {
@@ -140,7 +150,13 @@ void grava_medias_dijkstra()
     FILE *fp;
     int qtbarra_ene;
     char arq;
-    double media = med_temp_dijks/qt_temp_dijks;
+    double media;
+
+    if(qt_temp_dijks)
+        media = med_temp_dijks/qt_temp_dijks;
+    else
+        puts("zerooo!");
+    
 
     if((fp = fopen("./dados/media_exec_dijks.txt", "a+")) == NULL)
     {
@@ -182,7 +198,7 @@ void *print_time(void *args){
     double tIni, tFim;
     int i, j, aux;
     int cargaRetirada; /*potencia de carga que será retirado da bateria residual*/
-    gnuplot_ctrl **graph;
+    gnuplot_ctrl **graph; /*para funcionar o grafico, basta descomentar tudo que tem relação com graph */
     char msg[100]; /*msg para enviar no plot*/
     FILE *fp;
     char arq;
@@ -221,15 +237,7 @@ void *print_time(void *args){
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
         }
-        /*for (i = 0; i < N; i++) {
-            cargaRetirada = rand() % 8;
-            if(Nos[i].Pwa - cargaRetirada < 0){
-                Nos[i].Pwa = 0;
-                Nos[i].color = 4;
-            }else{
-                Nos[i].Pwa -= cargaRetirada;
-            }
-        }*/
+    
         click = 1;
         if(click == 1){           
             inicializa_color(N, Nos);
@@ -251,13 +259,13 @@ void *print_time(void *args){
                 inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
             } 
 
-            for(i = 0; i < total_caminhos; i++)
+            /*for(i = 0; i < total_caminhos; i++)
             {
                 gnuplot_close(graph[i]);
             }
 
             if(total_caminhos != 0)
-                free(graph);
+                free(graph);*/
 
             total_caminhos = 0;
 
@@ -267,6 +275,11 @@ void *print_time(void *args){
                 if(Nos[i].Pwa > 0)
                     dijkstra(&Nos[i], Nos, N);
             }
+            gettimeofday(&time_final, NULL);
+            tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
+
+            med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
+            qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
 
             while(Nos[inicial].mtDijks[final][N+1] != -1){
                 printf("Resposta para rota em dijkstra:::::\n");
@@ -306,7 +319,8 @@ void *print_time(void *args){
                             rotas->energy = (double)Nos[aux].Pwa;
                             rotas->fim = 0;
 
-                            med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
+                            if(rotas->id != inicial && rotas->id != final)/*somo as baterias dos dispositivos inicial e final somente apos sair do laco mais externo */
+                                med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
 
                             /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
                             if(aux == inicial){
@@ -339,17 +353,19 @@ void *print_time(void *args){
                     inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
                 }
 
+                gettimeofday(&time_inicial, NULL);
+                tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
                 for (i = 0; i < N; i++) {
                     if(Nos[i].Pwa > 0)
                         dijkstra(&Nos[i], Nos, N);
                 } 
-            }
-    
-            gettimeofday(&time_final, NULL);
-            tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
 
-            med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
-            qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
+                gettimeofday(&time_final, NULL);
+                tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
+
+                med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
+                qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
+            }
 
             if(total_caminhos == 0) {
                 if(Nos[inicial].Pwa == 0) {
@@ -363,22 +379,35 @@ void *print_time(void *args){
                     
                 grava_medias_dijkstra();
             }
-            else {
-                med_dispositivo += conta_dispositivos;
+
+            rotas = auxRotas;
+            conta_dispositivos = 0;
+            while(rotas != NULL){
+                rotas = rotas->prox;
+                conta_dispositivos++;
             }
+
+            conta_dispositivos -= (total_caminhos - 1)*2; /*conto somente 1 vez o dispositivo inicial e o final */
+
+            med_dispositivo += conta_dispositivos;
+            /*unica vez que somo as baterias do dispositivo inicial e do final eh aqui */
+            med_energia += Nos[inicial].Pwa;
+            med_energia += Nos[final].Pwa;
             
 
             conta_dispositivos = 0;
 
-            rotas = auxRotas;
+            /*rotas = auxRotas;
 
+            arquivo para mostrar o grafico de baterias comentado
+            
             for(i = 0; i < total_caminhos; i++){
 
-                sprintf(nome_arq,"./histograma/histog_%d.txt",i);
+                sprintf(nome_arq,"histograma/histog_%d.txt",i);
             
                 if((fp = fopen(nome_arq, "w")) == NULL)
                 {
-                    puts("Erro na abertura do arquivo de log para constru��o do caminho!\n");
+                    puts("Erro na abertura do arquivo de log para constru do caminho!\n");
                 }
 
                 while(!rotas->fim){
@@ -394,13 +423,8 @@ void *print_time(void *args){
 
                 fclose(fp);
             }
-                
-
-            printf("Tamanho inicial = %d",sizeof(*graph));
             
             graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
-
-            printf("Tamanho inicial = %d",sizeof(*graph));
 
             for(i = 0; i < total_caminhos; i++)
                 graph[i] = gnuplot_init();
@@ -423,7 +447,7 @@ void *print_time(void *args){
                 }else{
                     gnuplot_cmd(graph[i], "plot title 'no data'");
                 }
-            }
+            }*/
 
             click = -1;
         }
@@ -551,6 +575,12 @@ void init(void){
     }
     gettimeofday(&time_final, NULL);
     tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
+
+    gettimeofday(&time_final, NULL);
+    tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
+
+    med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
+    qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
 
     file_rec_matrix("MatrizDistancia", MatrizDistancia);
     file_rec_matrix_dij("Dijkstra");
