@@ -317,21 +317,23 @@ void dijkstra(NODE *INI, NODE *conjNos, int N){
         exit(2);
     }
 
-    if((fp = fopen("algoDijks", "a+")) == NULL)
+    /*if((fp = fopen("algoDijks", "a+")) == NULL)
     {
         puts("erro na abertura/criacao do arquivo algoDijks");
         exit(2);
-    }
+    }*/
+
+    //fprintf(fp, "Anahlise noh %d com predecessor = %d\n", pos_u, p[pos_u]);
 
     while(FILA != NULL){
-        u = remove_min(&FILA);
-        pos_u = u->id;fprintf(fp, "Anahlise noh %d com predecessor = %d\n", pos_u, p[pos_u]);
+        u = remove_min(&FILA); /*remove da fila o sensor de menor metrica */
+        pos_u = u->id; /*salvo o identificador dele, que representa a sua posicao no vetor */
         for(i = 0; i < N; i++){
             if(conjNos[u->id].mtAdjMet[1][i] > 0.0 /*metrica maior que 0 sao vizinhos */ && conjNos[u->id].mtAdjMet[1][i] < 100.0 && !pertenceVisitadosFila(visitados, &conjNos[i]) && conjNos[i].sendData == 0){
-                
                 metrica = conjNos[pos_u].mtAdjMet[1][i];
 
-                fprintf(fp,"Noh = %d Pwa = %d Pwi = %d dist = %.3f\n", i, conjNos[i].Pwa, conjNos[i].Pwi, conjNos[pos_u].mtAdjMet[0][i]);
+                /*fprintf(fp,"Noh = %d Pwa = %d Pwi = %d dist = %.3f\n", i, conjNos[i].Pwa, conjNos[i].Pwi, conjNos[pos_u].mtAdjMet[0][i]);*/
+                
                 if(d[i] > d[pos_u] + metrica){
                     if(p[i] != -1){//aqui significa que ele possuia um pai, e o seu pai deverá ser corrigido
                         //pois uma distância menor foi encontrada
@@ -361,8 +363,8 @@ void dijkstra(NODE *INI, NODE *conjNos, int N){
         }
         AdcListaVisitados(&visitados, u);
     }
-    fprintf(fp,"==================================================\n");
+    //fprintf(fp,"==================================================\n");
 
-    fclose(fp);
+//    fclose(fp);
 
 }

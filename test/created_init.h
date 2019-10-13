@@ -21,27 +21,35 @@ const int ALTURA_TELA = 800;
 typedef struct sensor
 {
     int Id;/*id = <posicao_vetor>*/
-    int Pwi; //Energia inicial do n�. Varia de 0 - 100. Se o power <= 20 ent�o � um estado cr�tico
-    int Pwa; //Energia atual
+    int Pwi; /*Energia inicial do sensor. Gerada entre 70 e 99 */
+    int Pwa; /* Energia atual, Gerada entre Pwi e (Pwi - 30)*/
+
+    /*dois auxiliares para recuperar o valor original/inicial de pwi e pwa */
+    int auxPwi;
+    int auxPwa;
+
+    /*x e y representa a posicao do sensor no plano */
     int x;
     int y;
-    int Pai;
 
-    float **mtAdjMet; //matriz [2][N], onde na primeira linha temos os n�s adjacentes com sua respectiva distancia ao n� refer�ncia.
-    // e na segunda linha temos as metricas para esses n�s.
-    float **mtDijks;
+    float **mtAdjMet; /*matriz [2][N], onde na primeira linha temos os sensores adjacentes com 
+    sua respectiva distancia ao sensor referencia. E na segunda linha temos as metricas para esses sensores.*/
+
+    float **mtDijks; /*representa a matriz gerada quando o algoritmo de dijkstra eh executado */
+
     int color; /*Representa as cores dos dispositivos na parte grafica
                  0 - preta      - dispositivo qualquer
                  1 - verde      - representa o inicial
                  2 - azul       - representa o final 
-                 3 - branco - participa da comunicacao fim a fim 
+                 3 - branco     - participa da comunicacao fim a fim 
                  4 - vermelho    - dispositivo sem carga
                  */
+
     int sendData; /* Essa variavel auxilia no descobrimento de multicaminhos 
                     1 - se enviou dados 
                      0 - caso nao envou*/
 
-    int countRoutes;
+    int countRoutes; /*representa a quantidade de rotas encontradas */
 
 
 }NODE;
@@ -140,6 +148,8 @@ void inicializaNos(int N, NODE *Nos, int sink)
         Nos[i].color = 0;
         Nos[i].sendData = 0;
         Nos[i].countRoutes = 0;
+        Nos[i].auxPwa = Nos[i].Pwa;
+        Nos[i].auxPwi = Nos[i].Pwi;
  
     }
 }

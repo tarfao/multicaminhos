@@ -23,7 +23,7 @@ test/sinepng:	test/sinepng.c gnuplot_i.o
 	$(CC) $(CFLAGS) -o test/sinepng test/sinepng.c gnuplot_i.o
 
 test/main: 	test/main.c gnuplot_i.o
-	$(CC) $(CFLAGS) -o test/main test/main.c gnuplot_i.o
+	$(CC) -o test/main test/main.c gnuplot_i.o $(CFLAGS)
 
 clean:
 	$(RM) gnuplot_i.o test/anim test/example test/sinepng test/main
