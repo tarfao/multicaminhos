@@ -194,6 +194,27 @@ void teste(ROTAS *p){
     }
 }
 
+void grava_cada_energia_ciclo(int baterias, int nDispositivos, char *nome_arq){
+    FILE *fp;
+    float media= 0.0;
+
+    if((fp = fopen(nome_arq,"a+")) == NULL){
+        puts("Erro na abertura do arquivo energia_multipath");
+        exit(1);
+    }
+
+    if(nDispositivos == 0){
+        puts("Nao foi possivel gravar");
+    }else{
+        media = baterias/nDispositivos;
+
+        fprintf(fp,"%.6f\n",media);
+    }
+
+    fclose(fp);
+
+}
+
 void *print_time(void *args){
 
     struct timeval time_inicial, time_final;
@@ -207,7 +228,6 @@ void *print_time(void *args){
     int qtbarra_ene;
     int num_arq;
     char nome_arq[20];
-    int med_aux_local;
     ROTAS *rotas; /*obtem os caminhos encontrados */
     ROTAS *auxRotas; 
     /*variaveis para contar a quantidade de caminhos e auxiliar 
@@ -219,7 +239,9 @@ void *print_time(void *args){
     int controla_qt_caminhos = 0; /*ele controla a quantidade de caminhos para limitar para apenas um caminho quando nao for o 
                             o algoritmo de caminhos multiplos que estiver executando, inicialmente nao necessita de controle
                             pois o primeiro algoritmo a iniciar eh o de caminhos multiplos */
-    DATE_THREAD date; /*utilizado pelo caminho unico para salvar os dados e plotar */
+    int media_energia_local;
+    int FUNCIONA = 1;
+
 
     printf("Resposta para rota em dijkstra:::::\n");
 
@@ -232,7 +254,7 @@ void *print_time(void *args){
     num_arq = 0;
     rotas = NULL; /*como nao foi encontrado nenhum caminho, inicializamos a variavel */
 
-    while(1) {
+    while(FUNCIONA) {
 
         // to refresh the window it calls display() function
         glutPostRedisplay();
@@ -245,6 +267,7 @@ void *print_time(void *args){
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
         }
+        free(graph);
 
         multicaminhos = 1;
     
@@ -296,7 +319,6 @@ void *print_time(void *args){
                 printf("Resposta para rota em dijkstra:::::\n");
                 total_caminhos++;  
                 aux = inicial;
-                med_aux_local = 0;
                 while (aux != final){
                     if(Nos[aux].Pwa == 0){
                         printf("Dispositivo descarregado de id = %i\n", aux);
@@ -383,6 +405,9 @@ void *print_time(void *args){
             }
 
             if(total_caminhos == 0) {
+
+                if(controla_qt_caminhos)
+                    FUNCIONA = 0;
                 if(Nos[inicial].Pwa == 0) {
                     puts("\nDispositivo inicial descarregado");
                 } else {
@@ -391,34 +416,50 @@ void *print_time(void *args){
                     else
                         puts("\nRede desconexa");
                 } 
-                    
-                //grava_medias_dijkstra();
+
+                /*if(!controla_qt_caminhos){    
+                    grava_medias_dijkstra();
+                }else{
+                    /*grava medias para algoritmo de caminho unico 
+            }*/
                 controla_qt_caminhos = 1;
 
                 for(i = 0; i < N; i++){
                     Nos[i].Pwa = Nos[i].auxPwa;
                     Nos[i].Pwi = Nos[i].auxPwi;
                 }
+                num_ciclos = 0;
+                med_temp_dijks = 0.0;
+                qt_temp_dijks = 0;
+                med_energia = 0; 
+                med_dispositivo = 0;
+                med_caminhos = 0;
             }
             
             num_ciclos++;
             rotas = auxRotas;
             conta_dispositivos = 0;
+            media_energia_local = 0;
             while(rotas != NULL){
-                rotas = rotas->prox;
+                media_energia_local += rotas->energy;
+                rotas = rotas->prox; 
                 conta_dispositivos++;
+            }
+
+            if(total_caminhos > 0){
+                if(controla_qt_caminhos){
+                    grava_cada_energia_ciclo(media_energia_local, conta_dispositivos, "energia_ciclo_unico.txt");
+                }else{
+                    grava_cada_energia_ciclo(media_energia_local, conta_dispositivos, "energia_ciclo_multipath.txt");
+                }
             }
             
             med_caminhos += total_caminhos;
-            conta_dispositivos -= (total_caminhos - 1)*2; /*conto somente 1 vez o dispositivo inicial e o final */
 
             med_dispositivo += conta_dispositivos;
             /*unica vez que somo as baterias do dispositivo inicial e do final eh aqui */
             med_energia += Nos[inicial].Pwa;
             med_energia += Nos[final].Pwa;
-            
-
-            conta_dispositivos = 0;
 
             rotas = auxRotas;
 
@@ -436,11 +477,9 @@ void *print_time(void *args){
                 while(!rotas->fim){
                     fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
                     rotas=rotas->prox;
-                    conta_dispositivos++;
                 }
 
                 fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                conta_dispositivos++;
                 if(rotas->prox != NULL)
                     rotas=rotas->prox;
 
@@ -477,13 +516,12 @@ void *print_time(void *args){
         
     }
 
-    while(auxRotas->prox != NULL){
-        rotas = auxRotas->prox;
+    rotas = auxRotas;
+    while(rotas != NULL){
+        auxRotas = rotas;
+        rotas = rotas->prox;
         free(auxRotas);
-        auxRotas=rotas;
     }
-
-    free(auxRotas);
 }
 
 /*funcao para gravar a matriz de distancia do tipo float em um arquivo de nome igual a file_name */
