@@ -263,11 +263,10 @@ void *print_time(void *args){
         tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
 
         tFim = 0;
-        while (tFim - tIni < 3.0) { 
+        while (tFim - tIni < 1.0) { 
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
         }
-        free(graph);
 
         multicaminhos = 1;
     
@@ -279,6 +278,8 @@ void *print_time(void *args){
             for (i = 0; i < N; i++) {
                 cargaRetirada = rand() % 8;
                 if(Nos[i].Pwa - cargaRetirada < 0){
+                    if(Nos[i].Pwa != 0)
+                        printf("\nDESCARREGOU NODE = %d %d - %d\n", i, Nos[i].Pwa, cargaRetirada);
                     Nos[i].Pwa = 0;
                     Nos[i].color = 4;
                 }else{
@@ -315,6 +316,8 @@ void *print_time(void *args){
             med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
             qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
 
+            auxRotas = NULL;
+            rotas = NULL;
             while(Nos[inicial].mtDijks[final][N+1] != -1 && multicaminhos == 1){
                 printf("Resposta para rota em dijkstra:::::\n");
                 total_caminhos++;  
@@ -352,8 +355,7 @@ void *print_time(void *args){
                             rotas->energy = (double)Nos[aux].Pwa;
                             rotas->fim = 0;
 
-                            if(rotas->id != inicial && rotas->id != final)/*somo as baterias dos dispositivos inicial e final somente apos sair do laco mais externo */
-                                med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
+                            med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
 
                             /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
                             if(aux == inicial){
@@ -474,19 +476,22 @@ void *print_time(void *args){
                     puts("Erro na abertura do arquivo de log para constru do caminho!\n");
                 }
 
-                while(!rotas->fim){
-                    fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                    rotas=rotas->prox;
-                }
+                if(rotas != NULL){
+                    while(!rotas->fim){
+                        fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                        rotas=rotas->prox;
+                    }
 
-                fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                if(rotas->prox != NULL)
-                    rotas=rotas->prox;
+                    fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                    if(rotas->prox != NULL)
+                        rotas=rotas->prox;
+                }
 
                 fclose(fp);
             }
             
-            graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
+            if(total_caminhos > 0)
+                graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
 
             for(i = 0; i < total_caminhos; i++)
                 graph[i] = gnuplot_init();
@@ -513,14 +518,13 @@ void *print_time(void *args){
 
             click = -1;
         }
-        
-    }
 
-    rotas = auxRotas;
-    while(rotas != NULL){
-        auxRotas = rotas;
-        rotas = rotas->prox;
-        free(auxRotas);
+        rotas = auxRotas;
+        while(rotas != NULL){
+            auxRotas = rotas;
+            rotas = rotas->prox;
+            free(auxRotas);
+        }   
     }
 }
 
@@ -820,4 +824,3 @@ int main(int argc, char **argv)
 
     return 0;
 }
-
