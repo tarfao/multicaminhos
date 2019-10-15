@@ -194,7 +194,7 @@ void teste(ROTAS *p){
     }
 }
 
-void grava_cada_energia_ciclo(int baterias, int nDispositivos, char *nome_arq){
+void grava_cada_energia_caminho_dispositivo(int baterias, int nDispositivos, int caminhos, char *nome_arq){
     FILE *fp;
     float media= 0.0;
 
@@ -208,11 +208,51 @@ void grava_cada_energia_ciclo(int baterias, int nDispositivos, char *nome_arq){
     }else{
         media = baterias/nDispositivos;
 
-        fprintf(fp,"%.6f\n",media);
+        fprintf(fp,"%.6f %d %d\n",media,caminhos, nDispositivos);
     }
 
     fclose(fp);
 
+}
+
+void finaliza_arquivo(char *nome_arq){
+    FILE *fp;
+
+    if((fp = fopen(nome_arq,"a+")) == NULL){
+        puts("Erro na abertura do arquivo finaliza_arquivoenergia_ciclo");
+        exit(1);
+    }
+
+    fprintf(fp,"======================FIM=====================\n");
+
+    fclose(fp);
+
+}
+
+void grava_tempo_multipath(double inicio, double fim, char *nome){
+    FILE *fp;
+
+    if((fp = fopen(nome,"a+")) == NULL){
+        puts("Erro na abertura do arquivo tempo_multipath");
+        exit(1);
+    }
+
+    fprintf(fp, "%.6f\n",(fim-inicio));
+
+    fclose(fp);
+}
+
+void grava_ciclos(int quantidade, char *nome){
+    FILE *fp;
+
+    if((fp = fopen(nome,"a+")) == NULL){
+        puts("Erro na abertura do arquivo ciclo");
+        exit(1);
+    }
+
+    fprintf(fp, "%d\n",quantidade);
+
+    fclose(fp);
 }
 
 void *print_time(void *args){
@@ -263,7 +303,7 @@ void *print_time(void *args){
         tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
 
         tFim = 0;
-        while (tFim - tIni < 1.0) { 
+        while (tFim - tIni < 4.0) { 
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
         }
@@ -278,8 +318,6 @@ void *print_time(void *args){
             for (i = 0; i < N; i++) {
                 cargaRetirada = rand() % 8;
                 if(Nos[i].Pwa - cargaRetirada < 0){
-                    if(Nos[i].Pwa != 0)
-                        printf("\nDESCARREGOU NODE = %d %d - %d\n", i, Nos[i].Pwa, cargaRetirada);
                     Nos[i].Pwa = 0;
                     Nos[i].color = 4;
                 }else{
@@ -391,6 +429,7 @@ void *print_time(void *args){
                 }
 
                 if(multicaminhos){ /*caso for o algoritmo de multicaminhos que esta executando, procuramos mais caminhos e guardamos o tempo */
+                    grava_tempo_multipath(tIni, tFim, "tempo_multipath.txt");
                     gettimeofday(&time_inicial, NULL);
                     tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
                     for (i = 0; i < N; i++) {
@@ -408,8 +447,19 @@ void *print_time(void *args){
 
             if(total_caminhos == 0) {
 
-                if(controla_qt_caminhos)
+                if(controla_qt_caminhos){//essa variavel inicia com 0, e so altera o seu valor para 1 uma unica vez, depois so 
+                                        //atribui a ela o mesmo valor 1, que significa que esta executando o metodo de caminho unico
                     FUNCIONA = 0;
+                    grava_ciclos(num_ciclos, "ciclos_singlepath.txt");
+                    finaliza_arquivo("ciclos_singlepath.txt");
+                    finaliza_arquivo("ciclos_multipath.txt");
+                    
+                }
+                else{
+                    finaliza_arquivo("energia_caminho_dispositivo_multipath.txt");
+                    grava_ciclos(num_ciclos, "ciclos_multipath.txt");
+                }
+
                 if(Nos[inicial].Pwa == 0) {
                     puts("\nDispositivo inicial descarregado");
                 } else {
@@ -448,11 +498,19 @@ void *print_time(void *args){
                 conta_dispositivos++;
             }
 
-            if(total_caminhos > 0){
-                if(controla_qt_caminhos){
-                    grava_cada_energia_ciclo(media_energia_local, conta_dispositivos, "energia_ciclo_unico.txt");
-                }else{
-                    grava_cada_energia_ciclo(media_energia_local, conta_dispositivos, "energia_ciclo_multipath.txt");
+            if(controla_qt_caminhos){
+                if(total_caminhos > 0){
+                    grava_tempo_multipath(tIni, tFim, "tempo_singlepath.txt");
+                    grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_unico.txt");
+                }
+                else{
+                    finaliza_arquivo("energia_caminho_dispositivo_unico.txt");
+                }
+                    
+            }else{
+                if(total_caminhos > 0){
+                    grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_multipath.txt");
+                    finaliza_arquivo("tempo_multipath.txt");
                 }
             }
             
@@ -505,7 +563,6 @@ void *print_time(void *args){
                     gnuplot_cmd(graph[i], "set yrange[0:100]");
                     gnuplot_set_xlabel(graph[i], "ID node");
                     gnuplot_set_ylabel(graph[i], "Energy");
-                    gnuplot_setstyle(graph[i], "fill solid");
                     gnuplot_cmd(graph[i],"set key above right");
                     sprintf(msg,"plot './histograma/histog_%d.txt' using 2:xtic(1) title 'Trafego de %i para %i -> %s' ",i, inicial, final,nome_arq);
                     gnuplot_cmd(graph[i], msg);
@@ -526,6 +583,7 @@ void *print_time(void *args){
             free(auxRotas);
         }   
     }
+    exit(0);
 }
 
 /*funcao para gravar a matriz de distancia do tipo float em um arquivo de nome igual a file_name */
@@ -819,7 +877,6 @@ int main(int argc, char **argv)
     
    	glutMainLoop();
 
-    pthread_join(threads, NULL);
     free(Nos);
 
     return 0;
