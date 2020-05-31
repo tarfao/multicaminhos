@@ -50,8 +50,7 @@ void verificaCoordenadas (NODE *conjNos, NODE *No, int dimX, int dimY, int N)
 				}else
 				{
 				    distancia = calcDist(conjNos[i].x, conjNos[i].y, No->x, No->y);
-				    if(distancia <= raio && distancia >= 20){/* 10 <= distancia <= 30*/
-				    	/*esta conectado. agora so preciso verificar se estah a uma distancia de 10*/
+				    if(distancia <= raio && distancia >= 20){/* 20 <= distancia <= raio para nao ficar sobreposto*/
 				    	i = N;
 				    	conectado = 1;
 				    }

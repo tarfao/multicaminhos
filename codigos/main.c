@@ -24,10 +24,6 @@ int N;/*representa a quantidade de dispositivos */
 int dispMenu = -1;/*representa o dispositivo que foi clicado */
 int inicial = -1, final = -1;/*representa o dispositivo inicial e final */
 int ax = LARGURA_TELA - 10, ay = ALTURA_TELA - 10; /*representa os eixos x e y do plano do opengl. Ele nao eh o tamanho da janela */
-int click = -1;/*representa o dispositivo eu devo atribuir a cor de inicial ou final
-            se -1 -> nao foi atribuido o incial
-            se 0 -> ja foi atribuido o inicial, resta o dispositivo final
-            se 1 -> os dois dispositivos ja foram definidos e pode iniciar o roteamento */
 
 /*médias  */
 double med_temp_dijks = 0.0;
@@ -153,7 +149,7 @@ void grava_medias_dijkstra()
     int qtbarra_ene;
     char arq;
     double media;
-
+    printf("grava medias ??");
     if(qt_temp_dijks)
         media = med_temp_dijks/qt_temp_dijks;
     else
@@ -274,7 +270,7 @@ void *print_time(void *args){
     na plotagem do grafico */
     int total_caminhos = 0;
     int conta_dispositivos;
-    int multicaminhos = 1; /*identifica se o algoritmo a ser executado é o multicaminhos ou o de caminho unico, incialmente 
+    int multicaminhos = 0; /*identifica se o algoritmo a ser executado é o multicaminhos ou o de caminho unico, incialmente 
                             eh o algoritmo de caminhos multiplos */
     int controla_qt_caminhos = 0; /*ele controla a quantidade de caminhos para limitar para apenas um caminho quando nao for o 
                             o algoritmo de caminhos multiplos que estiver executando, inicialmente nao necessita de controle
@@ -303,278 +299,274 @@ void *print_time(void *args){
         tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
 
         tFim = 0;
-        while (tFim - tIni < 4.0) { 
+        while (tFim - tIni < 3.0) { 
             gettimeofday(&time_final, NULL);
             tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
         }
 
         multicaminhos = 1;
-    
-        click = 1;
-        if(click == 1){           
-            inicializa_color(N, Nos);
-            Nos[inicial].color = 1;
-            Nos[final].color = 2;
-            for (i = 0; i < N; i++) {
-                cargaRetirada = rand() % 8;
-                if(Nos[i].Pwa - cargaRetirada < 0){
-                    Nos[i].Pwa = 0;
-                    Nos[i].color = 4;
-                }else{
-                    Nos[i].Pwa -= cargaRetirada;
-                    Nos[i].sendData = 0;
-                }
+            
+        inicializa_color(N, Nos);
+        Nos[inicial].color = 1;
+        Nos[final].color = 2;
+        for (i = 0; i < N; i++) {
+            cargaRetirada = rand() % 8;
+            if(Nos[i].Pwa - cargaRetirada < 0){
+                Nos[i].Pwa = 0;
+                Nos[i].color = 4;
+            }else{
+                Nos[i].Pwa -= cargaRetirada;
+                Nos[i].sendData = 0;
             }
+        }
+        conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
+
+        for(i = 0; i < N; i++){
+            inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
+        } 
+
+        for(i = 0; i < total_caminhos; i++)
+        {
+            gnuplot_close(graph[i]);
+        }
+
+        if(total_caminhos != 0)
+            free(graph);
+
+        total_caminhos = 0;
+
+        gettimeofday(&time_inicial, NULL);
+        tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
+        for (i = 0; i < N; i++) {
+            if(Nos[i].Pwa > 0) /*executa o dijkstra somente para os sensores com 
+                                bateria positiva */
+                dijkstra(&Nos[i], Nos, N);
+        }
+        gettimeofday(&time_final, NULL);
+        tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
+
+        med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
+        qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
+
+        auxRotas = NULL;
+        rotas = NULL;
+        while(Nos[inicial].mtDijks[final][N+1] != -1 && multicaminhos == 1){
+            printf("Resposta para rota em dijkstra:::::\n");
+            total_caminhos++;  
+            aux = inicial;
+            while (aux != final){
+                if(Nos[aux].Pwa == 0){
+                    printf("Dispositivo descarregado de id = %i\n", aux);
+                    inicializa_color(N, Nos);
+                    Nos[aux].color = 4;
+                    aux = final;
+                    //grava_medias_dijkstra();
+                    /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
+                }else{
+                    if((int)Nos[aux].mtDijks[final][N+1] == -1){
+                        teste(auxRotas);
+                        if(Nos[aux].countRoutes == 0)
+                            printf("Rede desconexa! %d\n",aux);
+                        else
+                            printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
+                        aux = final;
+                        //grava_medias_dijkstra();
+                    } else{
+                        if(rotas == NULL){
+                            rotas = malloc(sizeof(ROTAS));
+                            rotas->prox = NULL;
+                            auxRotas = rotas;
+                        }
+                        else{
+                            rotas->prox = malloc(sizeof(ROTAS));
+                            rotas = rotas->prox;
+                            rotas->prox = NULL;
+                        }
+                        
+                        rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                        rotas->energy = (double)Nos[aux].Pwa;
+                        rotas->fim = 0;
+
+                        med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
+
+                        /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
+                        if(aux == inicial){
+                            Nos[aux].countRoutes++;
+                        }else{
+                            Nos[aux].sendData = 1;
+                            Nos[aux].color = 3;
+                        }
+
+                        aux = (int)Nos[aux].mtDijks[final][N+1];
+
+                        if(aux == final){
+                            rotas->prox = malloc(sizeof(ROTAS));
+                            rotas = rotas->prox;
+                            rotas->prox = NULL;
+
+                            rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
+                            rotas->energy = (double)Nos[aux].Pwa;
+                            rotas->fim = 1;
+                            med_energia += rotas->energy;
+                            if(controla_qt_caminhos)
+                                multicaminhos = 0;
+                        }
+                    }
+                }
+
+            }
+
             conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
 
             for(i = 0; i < N; i++){
                 inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
-            } 
-
-            for(i = 0; i < total_caminhos; i++)
-            {
-                gnuplot_close(graph[i]);
             }
 
-            if(total_caminhos != 0)
-                free(graph);
+            if(multicaminhos){ /*caso for o algoritmo de multicaminhos que esta executando, procuramos mais caminhos e guardamos o tempo */
+                grava_tempo_multipath(tIni, tFim, "tempo_multipath.txt");
+                gettimeofday(&time_inicial, NULL);
+                tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
+                for (i = 0; i < N; i++) {
+                    if(Nos[i].Pwa > 0)
+                        dijkstra(&Nos[i], Nos, N);
+                } 
 
-            total_caminhos = 0;
-
-            gettimeofday(&time_inicial, NULL);
-            tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
-            for (i = 0; i < N; i++) {
-                if(Nos[i].Pwa > 0) /*executa o dijkstra somente para os sensores com 
-                                    bateria positiva */
-                    dijkstra(&Nos[i], Nos, N);
+                gettimeofday(&time_final, NULL);
+                tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
             }
-            gettimeofday(&time_final, NULL);
-            tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
 
             med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
             qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
-
-            auxRotas = NULL;
-            rotas = NULL;
-            while(Nos[inicial].mtDijks[final][N+1] != -1 && multicaminhos == 1){
-                printf("Resposta para rota em dijkstra:::::\n");
-                total_caminhos++;  
-                aux = inicial;
-                while (aux != final){
-                    if(Nos[aux].Pwa == 0){
-                        printf("Dispositivo descarregado de id = %i\n", aux);
-                        inicializa_color(N, Nos);
-                        Nos[aux].color = 4;
-                        aux = final;
-                        grava_medias_dijkstra();
-                        /*gravacao do arquivo de log do tempo de execucao do algoritmo de dijks */
-                    }else{
-                        if((int)Nos[aux].mtDijks[final][N+1] == -1){
-                            teste(auxRotas);
-                            if(Nos[aux].countRoutes == 0)
-                                printf("Rede desconexa! %d\n",aux);
-                            else
-                                printf("Numero total de rotas = %d\n", Nos[aux].countRoutes);
-                            aux = final;
-                            //grava_medias_dijkstra();
-                        } else{
-                            if(rotas == NULL){
-                                rotas = malloc(sizeof(ROTAS));
-                                rotas->prox = NULL;
-                                auxRotas = rotas;
-                            }
-                            else{
-                                rotas->prox = malloc(sizeof(ROTAS));
-                                rotas = rotas->prox;
-                                rotas->prox = NULL;
-                            }
-                            
-                            rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
-                            rotas->energy = (double)Nos[aux].Pwa;
-                            rotas->fim = 0;
-
-                            med_energia += rotas->energy;/*acumula a energia para gerar uma media para o arquivo */
-
-                            /*se o dispositivo analisado eh o inicial, entao encontramos uma rota a mais */
-                            if(aux == inicial){
-                                Nos[aux].countRoutes++;
-                            }else{
-                                Nos[aux].sendData = 1;
-                                Nos[aux].color = 3;
-                            }
-
-                            aux = (int)Nos[aux].mtDijks[final][N+1];
-
-                            if(aux == final){
-                                rotas->prox = malloc(sizeof(ROTAS));
-                                rotas = rotas->prox;
-                                rotas->prox = NULL;
-
-                                rotas->id = (double)Nos[aux].Id; /*double pois eh o que o grafico pede */
-                                rotas->energy = (double)Nos[aux].Pwa;
-                                rotas->fim = 1;
-                                med_energia += rotas->energy;
-                                if(controla_qt_caminhos)
-                                    multicaminhos = 0;
-                            }
-                        }
-                    }
-
-                }
-
-                conhece_metrica(N, Nos);/*Conhece a nova metrica dos dispositivos*/
-
-                for(i = 0; i < N; i++){
-                    inicializaMatrizf(N, N+2, -1.0, Nos[i].mtDijks);
-                }
-
-                if(multicaminhos){ /*caso for o algoritmo de multicaminhos que esta executando, procuramos mais caminhos e guardamos o tempo */
-                    grava_tempo_multipath(tIni, tFim, "tempo_multipath.txt");
-                    gettimeofday(&time_inicial, NULL);
-                    tIni = (double) time_inicial.tv_usec / 1000000 + (double) time_inicial.tv_sec;
-                    for (i = 0; i < N; i++) {
-                        if(Nos[i].Pwa > 0)
-                            dijkstra(&Nos[i], Nos, N);
-                    } 
-
-                    gettimeofday(&time_final, NULL);
-                    tFim = (double) time_final.tv_usec / 1000000 + (double) time_final.tv_sec;
-                }
-
-                med_temp_dijks += (tFim - tIni); /*variavel global, para acumular o tempo da execucao do algoritmo de dijkstra e calculo de rota */
-                qt_temp_dijks++;/*variavel global para controlar quantas vezes foi rodado o algoritmo e encontrado o caminho, consideramos como quantidade de ciclos tambem */
-            }
-
-            if(total_caminhos == 0) {
-
-                if(controla_qt_caminhos){//essa variavel inicia com 0, e so altera o seu valor para 1 uma unica vez, depois so 
-                                        //atribui a ela o mesmo valor 1, que significa que esta executando o metodo de caminho unico
-                    FUNCIONA = 0;
-                    grava_ciclos(num_ciclos, "ciclos_singlepath.txt");
-                    finaliza_arquivo("ciclos_singlepath.txt");
-                    finaliza_arquivo("ciclos_multipath.txt");
-                    
-                }
-                else{
-                    finaliza_arquivo("energia_caminho_dispositivo_multipath.txt");
-                    grava_ciclos(num_ciclos, "ciclos_multipath.txt");
-                }
-
-                if(Nos[inicial].Pwa == 0) {
-                    puts("\nDispositivo inicial descarregado");
-                } else {
-                    if (Nos[final].Pwa == 0)
-                        puts("\nDispositivo final descarregado");
-                    else
-                        puts("\nRede desconexa");
-                } 
-
-                /*if(!controla_qt_caminhos){    
-                    grava_medias_dijkstra();
-                }else{
-                    /*grava medias para algoritmo de caminho unico 
-            }*/
-                controla_qt_caminhos = 1;
-
-                for(i = 0; i < N; i++){
-                    Nos[i].Pwa = Nos[i].auxPwa;
-                    Nos[i].Pwi = Nos[i].auxPwi;
-                }
-                num_ciclos = 0;
-                med_temp_dijks = 0.0;
-                qt_temp_dijks = 0;
-                med_energia = 0; 
-                med_dispositivo = 0;
-                med_caminhos = 0;
-            }
-            
-            num_ciclos++;
-            rotas = auxRotas;
-            conta_dispositivos = 0;
-            media_energia_local = 0;
-            while(rotas != NULL){
-                media_energia_local += rotas->energy;
-                rotas = rotas->prox; 
-                conta_dispositivos++;
-            }
-
-            if(controla_qt_caminhos){
-                if(total_caminhos > 0){
-                    grava_tempo_multipath(tIni, tFim, "tempo_singlepath.txt");
-                    grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_unico.txt");
-                }
-                else{
-                    finaliza_arquivo("energia_caminho_dispositivo_unico.txt");
-                }
-                    
-            }else{
-                if(total_caminhos > 0){
-                    grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_multipath.txt");
-                    finaliza_arquivo("tempo_multipath.txt");
-                }
-            }
-            
-            med_caminhos += total_caminhos;
-
-            med_dispositivo += conta_dispositivos;
-            /*unica vez que somo as baterias do dispositivo inicial e do final eh aqui */
-            med_energia += Nos[inicial].Pwa;
-            med_energia += Nos[final].Pwa;
-
-            rotas = auxRotas;
-
-            //arquivo para mostrar o grafico de baterias comentado
-            
-            for(i = 0; i < total_caminhos; i++){
-
-                sprintf(nome_arq,"histograma/histog_%d.txt",i);
-            
-                if((fp = fopen(nome_arq, "w")) == NULL)
-                {
-                    puts("Erro na abertura do arquivo de log para constru do caminho!\n");
-                }
-
-                if(rotas != NULL){
-                    while(!rotas->fim){
-                        fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                        rotas=rotas->prox;
-                    }
-
-                    fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
-                    if(rotas->prox != NULL)
-                        rotas=rotas->prox;
-                }
-
-                fclose(fp);
-            }
-            
-            if(total_caminhos > 0)
-                graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
-
-            for(i = 0; i < total_caminhos; i++)
-                graph[i] = gnuplot_init();
-
-
-            for(i = 0; i < total_caminhos; i++){
-                sprintf(nome_arq,"histog_%d.txt",i);
-                gnuplot_resetplot(graph[i]);
-                if(auxRotas != NULL){
-                    gnuplot_cmd(graph[i], "set style data histograms");
-                    gnuplot_cmd(graph[i], "set yrange[0:100]");
-                    gnuplot_set_xlabel(graph[i], "ID node");
-                    gnuplot_set_ylabel(graph[i], "Energy");
-                    gnuplot_cmd(graph[i],"set key above right");
-                    sprintf(msg,"plot './histograma/histog_%d.txt' using 2:xtic(1) title 'Trafego de %i para %i -> %s' ",i, inicial, final,nome_arq);
-                    gnuplot_cmd(graph[i], msg);
-
-                    
-                }else{
-                    gnuplot_cmd(graph[i], "plot title 'no data'");
-                }
-            }
-
-            click = -1;
         }
+
+        if(total_caminhos == 0) {
+
+            if(controla_qt_caminhos){//essa variavel inicia com 0, e so altera o seu valor para 1 uma unica vez, depois so 
+                                    //atribui a ela o mesmo valor 1, que significa que esta executando o metodo de caminho unico
+                FUNCIONA = 0;
+                grava_ciclos(num_ciclos, "ciclos_singlepath.txt");
+                finaliza_arquivo("ciclos_singlepath.txt");
+                finaliza_arquivo("ciclos_multipath.txt");
+                
+            }
+            else{
+                finaliza_arquivo("energia_caminho_dispositivo_multipath.txt");
+                grava_ciclos(num_ciclos, "ciclos_multipath.txt");
+            }
+
+            if(Nos[inicial].Pwa == 0) {
+                puts("\nDispositivo inicial descarregado");
+            } else {
+                if (Nos[final].Pwa == 0)
+                    puts("\nDispositivo final descarregado");
+                else
+                    puts("\nRede desconexa");
+            } 
+
+            /*if(!controla_qt_caminhos){    
+                grava_medias_dijkstra();
+            }else{
+                /*grava medias para algoritmo de caminho unico 
+            }*/
+            controla_qt_caminhos = 1;
+
+            for(i = 0; i < N; i++){
+                Nos[i].Pwa = Nos[i].auxPwa;
+                Nos[i].Pwi = Nos[i].auxPwi;
+            }
+            num_ciclos = 0;
+            med_temp_dijks = 0.0;
+            qt_temp_dijks = 0;
+            med_energia = 0; 
+            med_dispositivo = 0;
+            med_caminhos = 0;
+        }
+        
+        num_ciclos++;
+        rotas = auxRotas;
+        conta_dispositivos = 0;
+        media_energia_local = 0;
+        while(rotas != NULL){
+            media_energia_local += rotas->energy;
+            rotas = rotas->prox; 
+            conta_dispositivos++;
+        }
+
+        if(controla_qt_caminhos){
+            if(total_caminhos > 0){
+                grava_tempo_multipath(tIni, tFim, "tempo_singlepath.txt");
+                grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_unico.txt");
+            }
+            else{
+                finaliza_arquivo("energia_caminho_dispositivo_unico.txt");
+            }
+                
+        }else{
+            if(total_caminhos > 0){
+                grava_cada_energia_caminho_dispositivo(media_energia_local, conta_dispositivos, total_caminhos, "energia_caminho_dispositivo_multipath.txt");
+                finaliza_arquivo("tempo_multipath.txt");
+            }
+        }
+        
+        med_caminhos += total_caminhos;
+
+        med_dispositivo += conta_dispositivos;
+        /*unica vez que somo as baterias do dispositivo inicial e do final eh aqui */
+        med_energia += Nos[inicial].Pwa;
+        med_energia += Nos[final].Pwa;
+
+        rotas = auxRotas;
+
+        //arquivo para mostrar o grafico de baterias comentado
+        
+        for(i = 0; i < total_caminhos; i++){
+
+            sprintf(nome_arq,"histograma/histog_%d.txt",i);
+        
+            if((fp = fopen(nome_arq, "w")) == NULL)
+            {
+                puts("Erro na abertura do arquivo de log para constru do caminho!\n");
+            }
+
+            if(rotas != NULL){
+                while(!rotas->fim){
+                    fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                    rotas=rotas->prox;
+                }
+
+                fprintf(fp, "%.1f %.1f\n",rotas->id, rotas->energy);
+                if(rotas->prox != NULL)
+                    rotas=rotas->prox;
+            }
+
+            fclose(fp);
+        }
+        
+        if(total_caminhos > 0)
+            graph = malloc(sizeof(gnuplot_ctrl*) * total_caminhos);
+
+        for(i = 0; i < total_caminhos; i++)
+            graph[i] = gnuplot_init();
+
+
+        for(i = 0; i < total_caminhos; i++){
+            sprintf(nome_arq,"histog_%d.txt",i);
+            gnuplot_resetplot(graph[i]);
+            if(auxRotas != NULL){
+                gnuplot_cmd(graph[i], "set style data histograms");
+                gnuplot_cmd(graph[i], "set yrange[0:100]");
+                gnuplot_set_xlabel(graph[i], "ID node");
+                gnuplot_set_ylabel(graph[i], "Energy");
+                gnuplot_cmd(graph[i],"set key above right");
+                sprintf(msg,"plot './histograma/histog_%d.txt' using 2:xtic(1) title 'Trafego de %i para %i -> %s' ",i, inicial, final,nome_arq);
+                gnuplot_cmd(graph[i], msg);
+
+                
+            }else{
+                gnuplot_cmd(graph[i], "plot title 'no data'");
+            }
+        }
+
 
         rotas = auxRotas;
         while(rotas != NULL){
@@ -718,6 +710,7 @@ void desenharCirculo(GLint x, GLint y, GLint raio, int num_linhas, double R, dou
 	int i,j; 
 
 	glColor3f(R,G,B);
+    glLineWidth(3.0);
 	glBegin(GL_LINE_LOOP); 
 		for (i = 0; i < num_linhas; i++) {
 			angle = 2*PI*i/num_linhas;
@@ -745,8 +738,8 @@ void organiza()
                 desenharCirculo((GLint)Nos[i].x, (GLint)Nos[i].y, 5,10, 0.0, 0.0, 1.0);
             break;
 
-            case 3: /*dispositivo da rota dos dados, branco */
-                desenharCirculo((GLint)Nos[i].x, (GLint)Nos[i].y, 5,10, 1.0, 1.0, 1.0);
+            case 3: /*dispositivo da rota dos dados, rosado */
+                desenharCirculo((GLint)Nos[i].x, (GLint)Nos[i].y, 5,10, 1.0, 0.8, 1.0);
             break;
 
             case 4:/*dispositivo descarregado, vermelho */
@@ -756,76 +749,10 @@ void organiza()
     }
 }
 
-/*funcao para analisar e executar uma acao correspondente as opcoes do menu */
-void GoMenu(int value){
-
-    switch(value){
-        case 1:
-            Nos[dispMenu].color = 1;
-            if( click == -1){
-                inicial = dispMenu;
-                click++;
-            }else{
-                Nos[inicial].color = 0;
-            }
-        break;
-
-        case 2:
-            if(click == 0){
-                Nos[dispMenu].color = 2;
-                click++;
-            }
-        break;
-
-        case 3:
-            Nos[dispMenu].Pwa = Nos[dispMenu].Pwi;
-
-    }
-    dispMenu = -1;
-    glutPostRedisplay();
-}
-
-/*funcao para criacao do menu se o usuario clicar em um dispositivo */
-void menu(){
-    int sub1;
-    
-    printf("click\n");
-    glutCreateMenu(GoMenu);
-    glutAddMenuEntry("Define source", 1);
-    glutAddMenuEntry("Define sink", 2);
-    glutAddMenuEntry("Recharge device", 3);
-    glutAttachMenu(GLUT_LEFT_BUTTON);
-}
-
-// Função callback chamada para gerenciar eventos do mouse
-void GerenciaMouse(int button, int state, int x, int y)
-{
-	int i = 0, x1, y1;
-	int encontrou = 0;
-	float distancia;
-	
-	x1 = x;
-	y1 = ay - y;
-    if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN){  
-         while(i < N && !encontrou){
-			distancia = calcDist(x1, y1, Nos[i].x, Nos[i].y);
-			if(distancia <= 5.0){
-                printf("click");
-			    encontrou = 1;
-                dispMenu = i;
-                
-                menu();
-			 	//desenharCirculo((GLint)Nos[i].x, (GLint)Nos[i].y, 5,10, 0.0, 1.0, 0.0);
-			}
-			i++;
-         }
-    }
-}
-
 // Função callback chamada para fazer o desenho
 void Desenha(void)
 {
-    glClearColor(0.3, 0.3, 0.3, 0); // sets the backgraound color to black
+    glClearColor(1.0, 1.0, 1.0, 0); // sets the backgraound color to black
     glClear(GL_COLOR_BUFFER_BIT); // clears the frame buffer and set values defined in glClearColor() function call
     glLoadIdentity();
 
@@ -839,8 +766,6 @@ void Desenha(void)
 }
 
 
-
-
 int main(int argc, char **argv)
 {
 
@@ -848,15 +773,16 @@ int main(int argc, char **argv)
     int rc,i;
     /*variáveis para thread de teste*/
 
-    if(argc != 4)
+    if(argc != 5)
     {
-        printf(" Error\n Forma de execucao: %s <num_sensores> <inicial_int> <final_int>\n", argv[0]);
+        printf(" Error\n Forma de execucao: %s <num_sensores> <inicial_int> <final_int> <raio_alcance>\n", argv[0]);
         exit(1);
     }
 
     N = atoi(argv[1]);
     inicial = atoi(argv[2]);
     final = atoi(argv[3]);
+    raio = atof(argv[4]);
 
     printf("%d %d %d", N, inicial, final);
 
@@ -867,7 +793,6 @@ int main(int argc, char **argv)
 	glutDisplayFunc(Desenha);
     glutIdleFunc(Desenha);
     init();
-    //glutMouseFunc(GerenciaMouse);
     rc = pthread_create(&threads, NULL, print_time, NULL);
     
     if(rc){

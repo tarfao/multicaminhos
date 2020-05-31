@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "router.h": "c",
+        "created_init.h": "c"
+    }
+}

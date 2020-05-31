@@ -10,7 +10,7 @@
 #include <unistd.h>
 #include <string.h>
 
-const double raio = 40;
+double raio = 50;
 //DIMENSÃOO DE BUSCA
 const int MAXX = 600;
 const int MAXY = 400;
@@ -41,7 +41,7 @@ typedef struct sensor
                  0 - preta      - dispositivo qualquer
                  1 - verde      - representa o inicial
                  2 - azul       - representa o final 
-                 3 - branco     - participa da comunicacao fim a fim 
+                 3 - rosado     - participa da comunicacao fim a fim 
                  4 - vermelho    - dispositivo sem carga
                  */
 
